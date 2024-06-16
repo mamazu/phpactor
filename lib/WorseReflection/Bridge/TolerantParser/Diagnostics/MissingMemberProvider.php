@@ -294,6 +294,23 @@ class MissingMemberProvider implements DiagnosticProvider
             }
         );
         yield new DiagnosticExample(
+            title: 'constant with type on class',
+            source: <<<'PHP'
+                <?php
+
+                class Foobar
+                {
+                    const string FOO = 'bar';
+                }
+
+                Foobar::FOO;
+                PHP,
+            valid: true,
+            assertion: function (Diagnostics $diagnostics): void {
+                Assert::assertCount(0, $diagnostics);
+            }
+        );
+        yield new DiagnosticExample(
             title: 'missing property on class is not supported yet',
             source: <<<'PHP'
                 <?php
@@ -316,6 +333,6 @@ class MissingMemberProvider implements DiagnosticProvider
 
     public function name(): string
     {
-        return 'missing_method';
+        return 'missing_member';
     }
 }
