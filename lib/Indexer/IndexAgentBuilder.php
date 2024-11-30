@@ -6,40 +6,32 @@ use Phpactor\Filesystem\Domain\FilePath;
 use Phpactor\Filesystem\Adapter\Simple\SimpleFileListProvider;
 use Phpactor\Filesystem\Adapter\Simple\SimpleFilesystem;
 use Phpactor\Indexer\Adapter\Filesystem\FilesystemFileListProvider;
-use Phpactor\Indexer\Adapter\Php\FileSearchIndex;
 use Phpactor\Indexer\Adapter\Php\Serialized\FileRepository;
 use Phpactor\Indexer\Adapter\Php\Serialized\SerializedIndex;
+use Phpactor\Indexer\Adapter\Search\FileSearchIndexBuilder;
+use Phpactor\Indexer\Adapter\Search\QueryClientBuilder;
+use Phpactor\Indexer\Adapter\Search\SearchIndexBuilderInterface;
 use Phpactor\Indexer\Adapter\Tolerant\TolerantIndexBuilder;
 use Phpactor\Indexer\Adapter\Tolerant\TolerantIndexer;
 use Phpactor\Indexer\Model\FileListProvider;
 use Phpactor\Indexer\Model\FileListProvider\ChainFileListProvider;
 use Phpactor\Indexer\Model\FileListProvider\DirtyFileListProvider;
 use Phpactor\Indexer\Model\Index;
-use Phpactor\Indexer\Model\IndexAccess;
 use Phpactor\Indexer\Model\Index\SearchAwareIndex;
 use Phpactor\Indexer\Model\RealIndexAgent;
 use Phpactor\Indexer\Model\IndexBuilder;
-use Phpactor\Indexer\Model\QueryClient;
 use Phpactor\Indexer\Model\Indexer;
-use Phpactor\Indexer\Model\RecordReferenceEnhancer;
 use Phpactor\Indexer\Model\RecordReferenceEnhancer\NullRecordReferenceEnhancer;
 use Phpactor\Indexer\Model\RecordSerializer;
 use Phpactor\Indexer\Model\RecordSerializer\PhpSerializer;
-use Phpactor\Indexer\Model\Record\ClassRecord;
-use Phpactor\Indexer\Model\Record\ConstantRecord;
-use Phpactor\Indexer\Model\Record\FunctionRecord;
 use Phpactor\Indexer\Model\SearchClient\HydratingSearchClient;
-use Phpactor\Indexer\Model\SearchIndex;
-use Phpactor\Indexer\Model\SearchIndex\FilteredSearchIndex;
-use Phpactor\Indexer\Model\SearchIndex\ValidatingSearchIndex;
 use Phpactor\Indexer\Model\TestIndexAgent;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
+use Phpactor\Indexer\Model\SearchIndex;
 
 final class IndexAgentBuilder
 {
-    private RecordReferenceEnhancer $enhancer;
-
     /**
      * @var array<string>
      */
@@ -73,15 +65,22 @@ final class IndexAgentBuilder
 
     private LoggerInterface $logger;
 
-    private function __construct(private string $indexRoot, private string $projectRoot)
-    {
-        $this->enhancer = new NullRecordReferenceEnhancer();
+    public function __construct(
+        private string $indexRoot,
+        private string $projectRoot,
+        private SearchIndexBuilderInterface $searchBuilder,
+        private QueryClientBuilder $queryClientBuilder
+    ) {
         $this->logger = new NullLogger();
     }
 
     public static function create(string $indexRootPath, string $projectRoot): self
     {
-        return new self($indexRootPath, $projectRoot);
+        return new self(
+            $indexRootPath,
+            $projectRoot,
+            new FileSearchIndexBuilder($indexRootPath),
+        );
     }
 
     public function setLogger(LoggerInterface $logger): self
@@ -98,9 +97,9 @@ final class IndexAgentBuilder
         return $this;
     }
 
-    public function setReferenceEnhancer(RecordReferenceEnhancer $enhancer): self
+    public function setSearchBuilder(SearchIndexBuilderInterface $searchBuilder): self
     {
-        $this->enhancer = $enhancer;
+        $this->searchBuilder = $searchBuilder;
 
         return $this;
     }
@@ -113,11 +112,11 @@ final class IndexAgentBuilder
     public function buildTestAgent(): TestIndexAgent
     {
         $index = $this->buildIndex();
-        $search = $this->buildSearch($index);
+        $search = $this->searchBuilder->build($index);
         $index = new SearchAwareIndex($index, $search);
-        $query = $this->buildQuery($index);
+        $query = $this->queryClientBuilder->build($index);
         $builder = $this->buildBuilder($index);
-        $indexer = $this->buildIndexer($builder, $index);
+        $indexer = $this->buildIndexer($builder, $index, $search);
         $search = new HydratingSearchClient($index, $search);
 
         return new RealIndexAgent($index, $query, $search, $indexer);
@@ -191,27 +190,6 @@ final class IndexAgentBuilder
         return new SerializedIndex($repository);
     }
 
-    private function buildQuery(Index $index): QueryClient
-    {
-        return new QueryClient(
-            $index,
-            $this->enhancer
-        );
-    }
-
-    private function buildSearch(IndexAccess $index): SearchIndex
-    {
-        $search = new FileSearchIndex($this->indexRoot . '/search');
-        $search = new ValidatingSearchIndex($search, $index, $this->logger);
-        $search = new FilteredSearchIndex($search, [
-            ClassRecord::RECORD_TYPE,
-            FunctionRecord::RECORD_TYPE,
-            ConstantRecord::RECORD_TYPE,
-        ]);
-
-        return $search;
-    }
-
     private function buildBuilder(Index $index): IndexBuilder
     {
         if (null !== $this->indexers) {
@@ -220,11 +198,15 @@ final class IndexAgentBuilder
         return TolerantIndexBuilder::create($index);
     }
 
-    private function buildIndexer(IndexBuilder $builder, Index $index): Indexer
-    {
+    private function buildIndexer(
+        IndexBuilder $builder,
+        Index $index,
+        SearchIndex $seachIndex,
+    ): Indexer {
         return new Indexer(
             $builder,
             $index,
+            $seachIndex,
             $this->buildFileListProvider(),
             $this->buildDirtyTracker()
         );

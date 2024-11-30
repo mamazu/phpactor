@@ -29,7 +29,7 @@ class SearchBench
         $indexPath = __DIR__ . '/../../cache';
         $this->search = IndexAgentBuilder::create(
             $indexPath,
-            __DIR__ .'/../../'
+            __DIR__ .'/../../',
         )
             ->buildAgent()->search();
     }
