@@ -23,7 +23,6 @@ class ValidatingSearchIndex implements SearchIndex
     public function search(Criteria $criteria): Generator
     {
         foreach ($this->innerIndex->search($criteria) as $result) {
-
             if (!$this->index->has($result)) {
                 $this->innerIndex->remove($result);
 
@@ -72,5 +71,10 @@ class ValidatingSearchIndex implements SearchIndex
     public function flush(): void
     {
         $this->innerIndex->flush();
+    }
+
+    public function reset(): void
+    {
+        $this->innerIndex->reset();
     }
 }

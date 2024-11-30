@@ -127,4 +127,9 @@ class FileSearchIndex implements SearchIndex
     {
         return $record->recordType().$record->identifier();
     }
+
+    public function reset(): void
+    {
+        unlink($this->path);
+    }
 }

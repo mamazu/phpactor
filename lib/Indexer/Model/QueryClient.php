@@ -19,10 +19,6 @@ class QueryClient
 
     private MemberQuery $memberQuery;
 
-    private Index $index;
-
-    private ?RecordReferenceEnhancer $enhancer;
-
     private ConstantQuery $constantQuery;
 
     public function __construct(Index $index, ?RecordReferenceEnhancer $enhancer = null)
@@ -34,8 +30,6 @@ class QueryClient
         $this->constantQuery = new ConstantQuery($index);
         $this->fileQuery = new FileQuery($index);
         $this->memberQuery = new MemberQuery($index, $enhancer);
-        $this->index = $index;
-        $this->enhancer = $enhancer;
     }
 
     public function class(): ClassQuery

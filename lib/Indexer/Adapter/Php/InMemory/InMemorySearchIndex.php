@@ -61,4 +61,9 @@ final class InMemorySearchIndex implements SearchIndex
     {
         return isset($this->buffer[$record->identifier()]);
     }
+
+    public function reset(): void
+    {
+        $this->buffer = [];
+    }
 }

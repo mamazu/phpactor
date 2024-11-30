@@ -60,4 +60,8 @@ class SerializedIndex implements Index
     {
         return $this->repository->get($record) ? true : false;
     }
+
+    public function flush(): void
+    {
+    }
 }
