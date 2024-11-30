@@ -24,4 +24,9 @@ class ShortNameBeginsWith extends Criteria
 
         return str_starts_with($record->shortName(), $this->name);
     }
+
+    public function name(): string
+    {
+        return $this->name;
+    }
 }
