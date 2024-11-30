@@ -8,5 +8,7 @@ interface SearchIndex extends SearchClient
 
     public function remove(Record $record): void;
 
+    public function reset(): void;
+
     public function flush(): void;
 }

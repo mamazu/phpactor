@@ -27,4 +27,12 @@ class AndCriteria extends Criteria
 
         return true;
     }
+
+    /**
+     * @return array<Criteria>
+     */
+    public function criterias(): array
+    {
+        return $this->criterias;
+    }
 }

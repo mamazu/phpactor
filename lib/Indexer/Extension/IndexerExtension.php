@@ -26,6 +26,10 @@ use Phpactor\FilePathResolver\PathResolver;
 use Phpactor\Indexer\Adapter\Php\PhpIndexerLister;
 use Phpactor\Indexer\Adapter\ReferenceFinder\IndexedNameSearcher;
 use Phpactor\Indexer\Adapter\ReferenceFinder\Util\ContainerTypeResolver;
+use Phpactor\Indexer\Adapter\Search\FileSearchIndexBuilder;
+use Phpactor\Indexer\Adapter\Search\QueryClientBuilder;
+use Phpactor\Indexer\Adapter\Search\SearchIndexBuilderInterface;
+use Phpactor\Indexer\Adapter\Search\SqliteSearchIndexBuilder;
 use Phpactor\Indexer\Adapter\Worse\IndexerClassSourceLocator;
 use Phpactor\Indexer\Adapter\Worse\IndexerConstantSourceLocator;
 use Phpactor\Indexer\Adapter\Worse\IndexerFunctionSourceLocator;
@@ -52,6 +56,7 @@ use Psr\Log\LoggerInterface;
 use RuntimeException;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Filesystem\Path;
+use Phpactor\Indexer\Model\LazyIndexAccess;
 
 class IndexerExtension implements Extension
 {
@@ -66,6 +71,7 @@ class IndexerExtension implements Extension
     public const PARAM_REFERENCES_DEEP_REFERENCES = 'indexer.reference_finder.deep';
     public const PARAM_IMPLEMENTATIONS_DEEP_REFERENCES = 'indexer.implementation_finder.deep';
     public const PARAM_STUB_PATHS = 'indexer.stub_paths';
+    public const PARAM_SEARCH_IMPLEMENTATION = 'indexer.search_implementation';
     public const PARAM_SUPPORTED_EXTENSIONS = 'indexer.supported_extensions';
     public const TAG_WATCHER = 'indexer.watcher';
     private const SERVICE_INDEXER_EXCLUDE_PATTERNS = 'indexer.exclude_patterns';
@@ -101,6 +107,7 @@ class IndexerExtension implements Extension
             self::PARAM_IMPLEMENTATIONS_DEEP_REFERENCES => true,
             self::PARAM_SUPPORTED_EXTENSIONS => ['php', 'phar'],
             self::PARAM_SEARCH_INCLUDE_PATTERNS => [],
+            self::PARAM_SEARCH_IMPLEMENTATION => 'sqlite3'
         ]);
         $schema->setDescriptions([
             self::PARAM_ENABLED_WATCHERS => 'List of allowed watchers. The first watcher that supports the current system will be used',
@@ -117,6 +124,7 @@ class IndexerExtension implements Extension
             self::PARAM_IMPLEMENTATIONS_DEEP_REFERENCES => 'Recurse over class implementations to resolve all class implementations (not just the classes directly implementing the subject)',
             self::PARAM_SUPPORTED_EXTENSIONS => 'File extensions (e.g. `php`) for files that should be indexed',
             self::PARAM_SEARCH_INCLUDE_PATTERNS => 'When searching the index exclude records whose fully qualified names match any of these regex patterns (use to exclude suggestions from search results). Namespace separators must be escaped as `\\\\\\\\` for example `^Foo\\\\\\\\` to include all namespaces whose first segment is `Foo`',
+            self::PARAM_SEARCH_IMPLEMENTATION => 'How to search for implementation (file or sqlite3)',
         ]);
         $schema->setTypes([
             self::PARAM_ENABLED_WATCHERS => 'array',
@@ -133,6 +141,7 @@ class IndexerExtension implements Extension
             self::PARAM_IMPLEMENTATIONS_DEEP_REFERENCES => 'boolean',
             self::PARAM_SUPPORTED_EXTENSIONS => 'array',
             self::PARAM_SEARCH_INCLUDE_PATTERNS => 'array',
+            self::PARAM_SEARCH_IMPLEMENTATION => 'string',
         ]);
     }
 
@@ -203,16 +212,13 @@ class IndexerExtension implements Extension
     private function registerModel(ContainerBuilder $container): void
     {
         $container->register(IndexAgent::class, function (Container $container) {
-            return $container->get(IndexAgentBuilder::class)
-                ->setReferenceEnhancer($container->get(WorseRecordReferenceEnhancer::class))
-                ->buildAgent();
+            return $container->get(IndexAgentBuilder::class)->buildAgent();
         });
 
         $container->register(IndexAccess::class, function (Container $container) {
-            // the worse reflection locators would have a circular reference so
-            // we create a new instance for them.
-            return $container->get(IndexAgentBuilder::class)
-                ->buildAgent()->access();
+            return new LazyIndexAccess(function () use ($container) {
+                return  $container->get(IndexAgent::class)->access();
+            });
         });
 
         $container->register(QueryClient::class, function (Container $container) {
@@ -221,6 +227,10 @@ class IndexerExtension implements Extension
 
         $container->register(SearchClient::class, function (Container $container) {
             return $container->get(IndexAgent::class)->search();
+        });
+
+        $container->register(QueryClientBuilder::class, function (Container $container) {
+            return new QueryClientBuilder($container->get(WorseRecordReferenceEnhancer::class));
         });
 
         $container->register(IndexAgentBuilder::class, function (Container $container) {
@@ -234,7 +244,12 @@ class IndexerExtension implements Extension
             $stubPaths = $container->parameter(self::PARAM_STUB_PATHS)->value();
             $stubPaths = array_map(fn (string $path): string => $resolver->resolve($path), $stubPaths);
 
-            return IndexAgentBuilder::create($indexPath, $this->projectRoot($container))
+            return (new IndexAgentBuilder(
+                $indexPath,
+                $this->projectRoot($container),
+                $container->get(SearchIndexBuilderInterface::class),
+                $container->get(QueryClientBuilder::class),
+            ))
                 /** @phpstan-ignore-next-line */
                 ->setExcludePatterns($container->get(self::SERVICE_INDEXER_EXCLUDE_PATTERNS))
                 /** @phpstan-ignore-next-line */
@@ -249,6 +264,17 @@ class IndexerExtension implements Extension
 
         $container->register(Indexer::class, function (Container $container) {
             return $container->get(IndexAgent::class)->indexer();
+        });
+
+        $container->register(SearchIndexBuilderInterface::class, function (Container $container) {
+            $resolver = $container->expect(FilePathResolverExtension::SERVICE_FILE_PATH_RESOLVER, PathResolver::class);
+            $indexPath = $resolver->resolve($container->parameter(self::PARAM_INDEX_PATH)->string());
+
+            if ($container->parameter(self::PARAM_SEARCH_IMPLEMENTATION)->string() === 'sqlite3') {
+                return new SqliteSearchIndexBuilder($indexPath .'/search.sqlite');
+            }
+
+            return new FileSearchIndexBuilder($indexPath, $this->logger($container));
         });
 
         $container->register(self::SERVICE_INDEXER_EXCLUDE_PATTERNS, function (Container $container) {

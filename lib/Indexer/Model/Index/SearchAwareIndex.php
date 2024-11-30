@@ -57,4 +57,8 @@ class SearchAwareIndex implements Index
     {
         return $this->innerIndex->has($record);
     }
+
+    public function flush(): void
+    {
+    }
 }

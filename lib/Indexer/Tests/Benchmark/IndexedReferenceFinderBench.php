@@ -20,8 +20,10 @@ class IndexedReferenceFinderBench
     {
         $this->workspace()->reset();
         $this->workspace()->put('SyliusSpec.php', (string)file_get_contents(__DIR__ . '/fixture/SyliusSpec.test'));
+
+        $indexRootPath = $this->workspace()->path('.index');
         $agent = IndexAgentBuilder::create(
-            $this->workspace()->path('.index'),
+            $indexRootPath,
             $this->workspace()->path(),
         )->buildAgent();
         $agent->indexer()->getJob()->run();

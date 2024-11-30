@@ -10,6 +10,7 @@ class Indexer
     public function __construct(
         private IndexBuilder $builder,
         private Index $index,
+        private ?SearchIndex $searchIndex,
         private FileListProvider $provider,
         private ?int $maxFileSizeToIndex,
         private DirtyDocumentTracker $dirtyDocumentTracker = new NullDirtyDocumentTracker(),
@@ -46,6 +47,7 @@ class Indexer
     public function reset(): void
     {
         $this->index->reset();
+        $this->searchIndex?->reset();
     }
 
     public function flush(): void
