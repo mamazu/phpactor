@@ -11,6 +11,8 @@ use SQLite3;
 
 class SqliteIndex implements Index
 {
+    private const TABLE_NAME = 'search_index';
+
     private array $records = [];
 
     public function __construct(private SQLite3 $db)
@@ -19,14 +21,23 @@ class SqliteIndex implements Index
 
     public function get(Record $record): Record
     {
+        $tableName = self::TABLE_NAME;
+        $result = $this->sqlite->prepare("SELECT record_type, identifier, type, flags FROM ${tableName} WHERE record_type = :record_type;");
+        $result->bindValue(':record_type', $record->recordType());
+        dd();
     }
 
     public function has(Record $record): bool
     {
+        $tableName = self::TABLE_NAME;
+        $result = $this->sqlite->prepare("SELECT record_type, identifier, type, flags FROM ${tableName} WHERE record_type = :record_type;");
+        $result->bindValue(':record_type', $record->recordType());
+        dd();
     }
 
     public function lastUpdate(): int
     {
+        return time();
     }
 
     public function write(Record $record): void
@@ -35,6 +46,7 @@ class SqliteIndex implements Index
 
     public function isFresh(SplFileInfo $fileInfo): bool
     {
+        return count($this->records);
     }
 
     public function reset(): void
@@ -48,5 +60,6 @@ class SqliteIndex implements Index
 
     public function done(): void
     {
+        return;
     }
 }

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Phpactor\Indexer\Adapter\Search;
 
-use Phpactor\Indexer\Adapter\Php\SqliteSearchIndex;
+use Phpactor\Indexer\Adapter\Sqlite\SqliteSearchIndex;
 use Phpactor\Indexer\Model\Index;
 use Phpactor\Indexer\Model\SearchIndex;
 use SQLite3;
