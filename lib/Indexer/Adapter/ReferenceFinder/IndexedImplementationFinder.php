@@ -107,7 +107,7 @@ class IndexedImplementationFinder implements ClassImplementationFinder
         foreach ($implementations as $implementation) {
             $record = $this->query->class()->get($implementation);
 
-            if (null === $record) {
+            if (!$record instanceof HasPath) {
                 continue;
             }
 
@@ -128,10 +128,6 @@ class IndexedImplementationFinder implements ClassImplementationFinder
                         continue;
                     }
                 }
-            }
-
-            if (!$record instanceof HasPath) {
-                continue;
             }
 
             $path = $record->filePath();

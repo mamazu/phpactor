@@ -57,13 +57,7 @@ final class WorkspaceSymbolProvider
             return new SymbolInformation(
                 name: $record->fqn()->__toString(),
                 kind: SymbolKind::CLASS_,
-                location: new Location(
-                    TextDocumentUri::fromString($record->filePath()),
-                    new Range(
-                        $this->toLspPosition($record->start(), $record->filePath()),
-                        $this->toLspPosition($record->start()->add(mb_strlen($record->shortName())), $record->filePath())
-                    )
-                )
+                location: $this->recordToLocation($record),
             );
         }
 
@@ -71,13 +65,7 @@ final class WorkspaceSymbolProvider
             return new SymbolInformation(
                 name: $record->fqn()->__toString(),
                 kind: SymbolKind::FUNCTION,
-                location: new Location(
-                    TextDocumentUri::fromString($record->filePath()),
-                    new Range(
-                        $this->toLspPosition($record->start(), $record->filePath()),
-                        $this->toLspPosition($record->start()->add(mb_strlen($record->shortName())), $record->filePath())
-                    )
-                )
+                location: $this->recordToLocation($record),
             );
         }
 
@@ -85,17 +73,22 @@ final class WorkspaceSymbolProvider
             return new SymbolInformation(
                 name: $record->fqn()->__toString(),
                 kind: SymbolKind::CONSTANT,
-                location: new Location(
-                    TextDocumentUri::fromString($record->filePath()),
-                    new Range(
-                        $this->toLspPosition($record->start(), $record->filePath()),
-                        $this->toLspPosition($record->start()->add(mb_strlen($record->shortName())), $record->filePath())
-                    )
-                )
+                location: $this->recordToLocation($record)
             );
         }
 
         return null;
+    }
+
+    private function recordToLocation(Record $record): Location
+    {
+        return new Location(
+            TextDocumentUri::fromString($record->filePath()),
+            new Range(
+                $this->toLspPosition($record->start(), $record->filePath()),
+                $this->toLspPosition($record->start()->add(mb_strlen($record->shortName())), $record->filePath())
+            )
+        );
     }
 
     private function toLspPosition(ByteOffset $offset, string $path): Position

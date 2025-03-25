@@ -4,15 +4,15 @@ namespace Phpactor\Indexer\Model\Record;
 
 use Phpactor\TextDocument\TextDocumentUri;
 
-interface HasPath
+interface HasDefinitions
 {
     /**
      * @return $this
      */
-    public function setFilePath(TextDocumentUri $filePath);
+    public function addDefinition(TextDocumentUri $definition): self;
 
     /**
-     * Rename to URI
+     * @return array<TextDocumentUri>
      */
-    public function filePath(): ?string;
+    public function definitions(): array;
 }

@@ -10,7 +10,7 @@ use SplFileInfo;
 
 class FileRecord implements HasPath, Record
 {
-    use HasPathTrait;
+    use HasDefinitionsTrait;
     public const RECORD_TYPE = 'file';
 
     /**
@@ -20,12 +20,12 @@ class FileRecord implements HasPath, Record
 
     private function __construct(string $filePath)
     {
-        $this->filePath = $filePath;
+        $this->definitions = $filePath;
     }
 
     public function __wakeup(): void
     {
-        if (null === $this->filePath) {
+        if (null === $this->definitions) {
             throw new CorruptedRecord(sprintf(
                 'Record was corrupted'
             ));
