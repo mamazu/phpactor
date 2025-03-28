@@ -19,15 +19,17 @@ use Phpactor\Indexer\Model\Record\ClassRecord;
 use Phpactor\Indexer\Model\Record\HasFlags;
 use Phpactor\Indexer\Model\SearchIndex;
 use SQLite3;
+use Webmozart\Assert\Assert;
 
 class SqliteSearchIndex implements SearchIndex
 {
     /**
-     * Flush to the filesystem after BATCH_SIZE updates
+     * Flush database after BATCH_SIZE updates
      */
     private const BATCH_SIZE = 1_000;
     private const TABLE_NAME = 'search_index';
 
+    /** @var array<Record> */
     private array $subjects = [];
 
     private int $subjectCount = 0;
@@ -64,15 +66,16 @@ class SqliteSearchIndex implements SearchIndex
             $condition = ' WHERE '.$condition;
         }
 
-        var_dump($condition);
         $tableName = self::TABLE_NAME;
-        $result = $this->sqlite->prepare("SELECT record_type, identifier, type, flags FROM ${tableName} ". $condition);
+        $statement = $this->sqlite->prepare("SELECT record_type, identifier, type, flags FROM ${tableName} ". $condition);
+        Assert::object($statement, 'Could not prepare sqlite search query.');
+
         foreach ($parameters as $name => $value) {
-            $result->bindValue($name, $value);
+            $statement->bindValue($name, $value);
         }
 
-        $result = $result->execute();
-        $row = $result->fetchArray();
+        $statement = $statement->execute();
+        $row = $statement->fetchArray();
         while ($row) {
             [ $recordType, $identifier, $type, $flags ] = $row;
             $record = RecordFactory::create($recordType, $identifier);
@@ -87,7 +90,7 @@ class SqliteSearchIndex implements SearchIndex
             }
 
             yield $record;
-            $row = $result->fetchArray();
+            $row = $statement->fetchArray();
         }
     }
 
@@ -106,6 +109,8 @@ class SqliteSearchIndex implements SearchIndex
         $tableName = self::TABLE_NAME;
         $query = $this->sqlite->prepare("DELETE FROM ${tableName}
             WHERE record_type = :record_type AND identifier = :identifier AND type = :type");
+        Assert::object($query, 'Could not prepare sqlite remove query.');
+
         $query->bindValue(':record_type', $record->recordType());
         $query->bindValue(':identifier', $record->identifier());
         $query->bindValue(':type', $record instanceof ClassRecord? $record->type() : '');
@@ -118,6 +123,7 @@ class SqliteSearchIndex implements SearchIndex
         $query = $this->sqlite->prepare("INSERT OR IGNORE INTO ${tableName}
             (record_type, identifier, type, flags) VALUES
             (:record_type, :identifier, :type, :flags)");
+        Assert::object($query, 'Could not prepare sqlite flush query.');
 
         $this->sqlite->exec('begin transaction');
         foreach ($this->subjects as $record) {

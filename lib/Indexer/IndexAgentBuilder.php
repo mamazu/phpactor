@@ -80,6 +80,7 @@ final class IndexAgentBuilder
             $indexRootPath,
             $projectRoot,
             new FileSearchIndexBuilder($indexRootPath),
+            new QueryClientBuilder(new NullRecordReferenceEnhancer()),
         );
     }
 
