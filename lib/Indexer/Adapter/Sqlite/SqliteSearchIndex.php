@@ -51,9 +51,9 @@ class SqliteSearchIndex implements SearchIndex
         if (!$this->tableExists($this->sqlite, $tableName)) {
             $this->sqlite->exec("CREATE TABLE ${tableName} (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                record_type TEXT,
-                identifier TEXT,
-                type TEXT,
+                record_type TEXT NOT NULL,
+                identifier TEXT NOT NULL,
+                type TEXT NOT NULL,
                 flags INTEGER
             );
             CREATE UNIQUE INDEX ${tableName}_idx ON ${tableName} (record_type, identifier);
