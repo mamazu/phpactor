@@ -23,6 +23,8 @@ use Webmozart\Assert\Assert;
 
 class SqliteSearchIndex implements SearchIndex
 {
+    use SqliteHelper;
+
     /**
      * Flush database after BATCH_SIZE updates
      */
@@ -40,7 +42,7 @@ class SqliteSearchIndex implements SearchIndex
     {
         // Check to see what tables exist
         $tableName = self::TABLE_NAME;
-        if ($this->sqlite->querySingle("SELECT name FROM sqlite_master WHERE type='table' AND name ='${tableName}';") === null) {
+        if (!$this->tableExists($this->sqlite, $tableName)) {
             $this->sqlite->exec("CREATE TABLE ${tableName} (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 record_type TEXT,
