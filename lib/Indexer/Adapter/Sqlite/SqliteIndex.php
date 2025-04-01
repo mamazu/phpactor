@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Phpactor\Indexer\Adapter\Sqlite;
 
+use Phpactor\Indexer\Model\Record\FileRecord;
 use Psr\Log\LoggerInterface;
 use Phpactor\Indexer\Model\Index;
 use Phpactor\Indexer\Model\Record;
@@ -17,7 +18,10 @@ class SqliteIndex implements Index
     use SqliteHelper;
 
     private const CLASS_TABLE_NAME = 'class_index';
+
     private const FILE_TABLE_NAME = 'file_index';
+
+    private const FILE_REFERENCE_TABLE_NAME = 'file_refence_index';
 
     private array $records = [];
 
@@ -32,7 +36,7 @@ class SqliteIndex implements Index
                 type TEXT,
                 fqn TEXT,
                 start INTEGER,
-                end INTEGER,
+                end INTEGER NULL,
                 file_path TEXT,
                 flags INTEGER
             );
@@ -45,7 +49,21 @@ class SqliteIndex implements Index
         $tableName = self::FILE_TABLE_NAME;
         if (!$this->tableExists($this->db, $tableName)) {
             $this->db->exec("CREATE TABLE {$tableName} (
-                filePath TEXT UNIQUE
+                filePath TEXT UNIQUE NOT NULL
+            );
+            ");
+        }
+
+        $tableName = self::FILE_REFERENCE_TABLE_NAME;
+        if (!$this->tableExists($this->db, $tableName)) {
+            $this->db->exec("CREATE TABLE {$tableName} (
+                file_id INTEGER,
+                reference_type TEXT,
+                reference_identifier TEXT,
+                reference_start INTEGER NOT NULL,
+                reference_container_type TEXT,
+                reference_flags INTEGER,
+                reference_end INTEGER
             );
             ");
         }
@@ -108,9 +126,17 @@ class SqliteIndex implements Index
             $statement->bindValue(':flags', $record->flags());
 
             $result = $statement->execute();
-        } else {
-            Assert::true(false, 'No writer defined for records of type: ' . $record->recordType());
+            return;
         }
+        if ($record instanceof FileRecord) {
+            $tableName = self::FILE_TABLE_NAME;
+            $statement = $this->db->prepare(
+                "INSERT OR IGNORE INTO {$tableName} VALUES (:filePath)",
+            );
+            return;
+        }
+
+        Assert::true(false, 'No writer defined for records of type: ' . $record->recordType());
     }
 
     public function isFresh(SplFileInfo $fileInfo): bool
