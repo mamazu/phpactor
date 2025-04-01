@@ -10,8 +10,21 @@ class LazyIndexAccess implements IndexAccess
 {
     private ?IndexAccess $index = null;
 
+    /**
+     * @param Closure(): ?IndexAccess $lazy
+     */
     public function __construct(private Closure $lazy)
     {
+    }
+
+    public function get(Record $record): Record
+    {
+        return $this->getIndex()->get($record);
+    }
+
+    public function has(Record $record): bool
+    {
+        return $this->getIndex()->has($record);
     }
 
     private function getIndex(): IndexAccess
@@ -19,16 +32,7 @@ class LazyIndexAccess implements IndexAccess
         if ($this->index === null) {
             $this->index = call_user_func($this->lazy);
         }
+
         return $this->index;
-    }
-
-    public function get(Record $record): Record
-    {
-        return $this->index->get($record);
-    }
-
-    public function has(Record $record): bool
-    {
-        return $this->index->has($record);
     }
 }

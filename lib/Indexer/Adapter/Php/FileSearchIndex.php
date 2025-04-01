@@ -104,6 +104,11 @@ class FileSearchIndex implements SearchIndex
         $this->dirty = false;
     }
 
+    public function reset(): void
+    {
+        unlink($this->path);
+    }
+
     private function open(): void
     {
         if ($this->initialized) {
@@ -126,10 +131,5 @@ class FileSearchIndex implements SearchIndex
     private function recordHash(Record $record): string
     {
         return $record->recordType().$record->identifier();
-    }
-
-    public function reset(): void
-    {
-        unlink($this->path);
     }
 }

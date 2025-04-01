@@ -23,6 +23,7 @@ use Phpactor\Extension\Rpc\RpcExtension;
 use Phpactor\Extension\WorseReflection\WorseReflectionExtension;
 use Phpactor\Extension\FilePathResolver\FilePathResolverExtension;
 use Phpactor\FilePathResolver\PathResolver;
+use Phpactor\Indexer\Adapter\Php\FileIndexFactory;
 use Phpactor\Indexer\Adapter\Php\PhpIndexerLister;
 use Phpactor\Indexer\Adapter\ReferenceFinder\IndexedNameSearcher;
 use Phpactor\Indexer\Adapter\ReferenceFinder\Util\ContainerTypeResolver;
@@ -30,6 +31,7 @@ use Phpactor\Indexer\Adapter\Search\FileSearchIndexBuilder;
 use Phpactor\Indexer\Adapter\Search\QueryClientBuilder;
 use Phpactor\Indexer\Adapter\Search\SearchIndexBuilderInterface;
 use Phpactor\Indexer\Adapter\Search\SqliteSearchIndexBuilder;
+use Phpactor\Indexer\Adapter\Sqlite\SqliteIndexFactory;
 use Phpactor\Indexer\Adapter\Worse\IndexerClassSourceLocator;
 use Phpactor\Indexer\Adapter\Worse\IndexerConstantSourceLocator;
 use Phpactor\Indexer\Adapter\Worse\IndexerFunctionSourceLocator;
@@ -39,6 +41,7 @@ use Phpactor\Indexer\Extension\Command\IndexSearchCommand;
 use Phpactor\Indexer\IndexAgent;
 use Phpactor\Indexer\IndexAgentBuilder;
 use Phpactor\Indexer\Model\IndexAccess;
+use Phpactor\Indexer\Model\IndexFactoryInterface;
 use Phpactor\MapResolver\Resolver;
 use Phpactor\Indexer\Adapter\ReferenceFinder\IndexedImplementationFinder;
 use Phpactor\Indexer\Extension\Command\IndexQueryCommand;
@@ -215,6 +218,23 @@ class IndexerExtension implements Extension
             return $container->get(IndexAgentBuilder::class)->buildAgent();
         });
 
+        $container->register(IndexFactoryInterface::class, function (Container $container) {
+            $resolver = $container->expect(
+                FilePathResolverExtension::SERVICE_FILE_PATH_RESOLVER,
+                PathResolver::class
+            );
+            $indexPath = $resolver->resolve($container->parameter(self::PARAM_INDEX_PATH)->string());
+
+            if ($container->parameter(self::PARAM_SEARCH_IMPLEMENTATION)->string() === 'sqlite3') {
+                return new SqliteIndexFactory(
+                    rtrim($indexPath, '/') .'.sqlite',
+                    $this->logger($container),
+                );
+            }
+
+            return new FileIndexFactory($indexPath, $this->logger($container));
+        });
+
         $container->register(IndexAccess::class, function (Container $container) {
             return new LazyIndexAccess(function () use ($container) {
                 return  $container->get(IndexAgent::class)->access();
@@ -248,6 +268,7 @@ class IndexerExtension implements Extension
                 $indexPath,
                 $this->projectRoot($container),
                 $container->get(SearchIndexBuilderInterface::class),
+                $container->get(IndexFactoryInterface::class),
                 $container->get(QueryClientBuilder::class),
             ))
                 /** @phpstan-ignore-next-line */
@@ -271,7 +292,7 @@ class IndexerExtension implements Extension
             $indexPath = $resolver->resolve($container->parameter(self::PARAM_INDEX_PATH)->string());
 
             if ($container->parameter(self::PARAM_SEARCH_IMPLEMENTATION)->string() === 'sqlite3') {
-                return new SqliteSearchIndexBuilder($indexPath .'/search.sqlite');
+                return new SqliteSearchIndexBuilder(rtrim($indexPath, '/') .'.sqlite');
             }
 
             return new FileSearchIndexBuilder($indexPath, $this->logger($container));
