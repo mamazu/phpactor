@@ -226,10 +226,10 @@ class IndexerExtension implements Extension
             $indexPath = $resolver->resolve($container->parameter(self::PARAM_INDEX_PATH)->string());
 
             if ($container->parameter(self::PARAM_SEARCH_IMPLEMENTATION)->string() === 'sqlite3') {
-                return new SqliteIndexFactory(
-                    rtrim($indexPath, '/') .'.sqlite',
-                    $this->logger($container),
-                );
+                //return new SqliteIndexFactory(
+                    //rtrim($indexPath, '/') .'.sqlite',
+                    //$this->logger($container),
+                //);
             }
 
             return new FileIndexFactory($indexPath, $this->logger($container));
@@ -292,7 +292,7 @@ class IndexerExtension implements Extension
             $indexPath = $resolver->resolve($container->parameter(self::PARAM_INDEX_PATH)->string());
 
             if ($container->parameter(self::PARAM_SEARCH_IMPLEMENTATION)->string() === 'sqlite3') {
-                return new SqliteSearchIndexBuilder(rtrim($indexPath, '/') .'.sqlite');
+                return new SqliteSearchIndexBuilder(rtrim($indexPath, '/') .'.sqlite', $this->logger($container));
             }
 
             return new FileSearchIndexBuilder($indexPath, $this->logger($container));

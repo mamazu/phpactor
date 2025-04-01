@@ -24,4 +24,9 @@ class FqnBeginsWith extends Criteria
 
         return str_starts_with($record->fqn()->__toString(), $this->name);
     }
+
+    public function name(): string
+    {
+        return $this->name;
+    }
 }
