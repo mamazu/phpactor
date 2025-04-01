@@ -50,7 +50,7 @@ trait FullyQualifiedReferenceTrait
 
     public function start(): ByteOffset
     {
-        return ByteOffset::fromInt($this->start);
+        return ByteOffset::fromInt($this->start ?? 0);
     }
 
     public function end(): ByteOffset
