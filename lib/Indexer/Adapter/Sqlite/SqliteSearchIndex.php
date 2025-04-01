@@ -9,7 +9,9 @@ use Phpactor\Filesystem\Domain\Exception\NotSupported;
 use Phpactor\Indexer\Model\Query\Criteria;
 use Phpactor\Indexer\Model\Query\Criteria\AndCriteria;
 use Phpactor\Indexer\Model\Query\Criteria\ExactShortName;
+use Phpactor\Indexer\Model\Query\Criteria\FqnBeginsWith;
 use Phpactor\Indexer\Model\Query\Criteria\IsClass;
+use Phpactor\Indexer\Model\Query\Criteria\IsClassType;
 use Phpactor\Indexer\Model\Query\Criteria\IsFunction;
 use Phpactor\Indexer\Model\Query\Criteria\IsConstant;
 use Phpactor\Indexer\Model\Query\Criteria\ShortNameBeginsWith;
@@ -18,6 +20,7 @@ use Phpactor\Indexer\Model\RecordFactory;
 use Phpactor\Indexer\Model\Record\ClassRecord;
 use Phpactor\Indexer\Model\Record\HasFlags;
 use Phpactor\Indexer\Model\SearchIndex;
+use Psr\Log\LoggerInterface;
 use SQLite3;
 use Webmozart\Assert\Assert;
 
@@ -38,7 +41,10 @@ class SqliteSearchIndex implements SearchIndex
 
     private bool $dirty = false;
 
-    public function __construct(private SQLite3 $sqlite)
+    public function __construct(
+        private SQLite3 $sqlite,
+        private LoggerInterface $logger,
+    )
     {
         // Check to see what tables exist
         $tableName = self::TABLE_NAME;
@@ -69,7 +75,9 @@ class SqliteSearchIndex implements SearchIndex
         }
 
         $tableName = self::TABLE_NAME;
-        $statement = $this->sqlite->prepare("SELECT record_type, identifier, type, flags FROM ${tableName} ". $condition);
+        $sqlQuery = "SELECT record_type, identifier, type, flags FROM ${tableName} ". $condition;
+        $this->logger->debug($sqlQuery);
+        $statement = $this->sqlite->prepare($sqlQuery);
         Assert::object($statement, 'Could not prepare sqlite search query.');
 
         foreach ($parameters as $name => $value) {
@@ -87,7 +95,9 @@ class SqliteSearchIndex implements SearchIndex
             }
 
             if (false === $criteria->isSatisfiedBy($record)) {
-                var_dump($row);
+                // Found a row that should match but doesn't. Fetch it (to remove it from the iterator and move on).
+                $row = $statement->fetchArray();
+
                 continue;
             }
 
@@ -162,8 +172,8 @@ class SqliteSearchIndex implements SearchIndex
             for ($i = 0; $i < count($criteria->criterias()); $i++) {
                 $one = $criteria->criterias()[$i];
                 [$conditionPart, $parameterParts] = self::convertToCriteriaToCriteria($one);
-                if ($i !== count($criteria->criterias()) - 1) {
-                    $condition.='AND ';
+                if ($i !== 0) {
+                    $condition.=' AND ';
                 }
                 $condition.='('.$conditionPart.')';
                 $parameters = array_merge($parameters, $parameterParts);
@@ -171,11 +181,16 @@ class SqliteSearchIndex implements SearchIndex
             return [$condition, $parameters];
         } elseif ($criteria instanceof IsConstant) {
             return ['record_type = :record_type', [':record_type' => 'constant']];
-        } elseif ($criteria instanceof IsClass) {
+        } elseif ($criteria instanceof IsClass || $criteria instanceof IsClassType) {
             return ['record_type = :record_type', [':record_type' => 'class']];
         } elseif ($criteria instanceof IsFunction) {
             return ['record_type = :record_type', [':record_type' => 'function']];
         } elseif ($criteria instanceof ShortNameBeginsWith) {
+            return [
+                'identifier GLOB \'*\\'.$criteria->name().'*\' OR identifier GLOB \''.$criteria->name().'*\\\'',
+                []
+            ];
+        } elseif ($criteria instanceof FqnBeginsWith) {
             return [
                 'identifier GLOB \''.$criteria->name().'*\'',
                 []
