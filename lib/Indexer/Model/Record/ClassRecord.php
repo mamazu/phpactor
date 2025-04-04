@@ -6,7 +6,7 @@ use Attribute;
 use Phpactor\Indexer\Model\Name\FullyQualifiedName;
 use Phpactor\Indexer\Model\Record;
 
-final class ClassRecord implements Record, HasFileReferences, HasFlags, HasPath, HasFullyQualifiedName
+final class ClassRecord implements Record, HasFileReferences, HasFlags, HasPath, HasFullyQualifiedName, \Stringable
 {
     use FullyQualifiedReferenceTrait;
     use HasFileReferencesTrait;
@@ -120,5 +120,10 @@ final class ClassRecord implements Record, HasFileReferences, HasFlags, HasPath,
         $clone = clone $this;
         $clone->type = $type;
         return $clone;
+    }
+
+    public function __toString(): string
+    {
+        return self::class.' ('.$this->fqn.')';
     }
 }

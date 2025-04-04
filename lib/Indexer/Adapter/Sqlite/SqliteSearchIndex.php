@@ -44,8 +44,7 @@ class SqliteSearchIndex implements SearchIndex
     public function __construct(
         private SQLite3 $sqlite,
         private LoggerInterface $logger,
-    )
-    {
+    ) {
         // Check to see what tables exist
         $tableName = self::TABLE_NAME;
         if (!$this->tableExists($this->sqlite, $tableName)) {

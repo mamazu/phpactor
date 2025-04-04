@@ -7,8 +7,9 @@ use Phpactor\Indexer\Model\Record;
 use Phpactor\Indexer\Model\RecordReference;
 use Phpactor\Indexer\Model\RecordReferences;
 use SplFileInfo;
+use Stringable;
 
-class FileRecord implements HasPath, Record
+class FileRecord implements HasPath, Record, Stringable
 {
     use HasPathTrait;
     public const RECORD_TYPE = 'file';
@@ -30,6 +31,11 @@ class FileRecord implements HasPath, Record
                 'Record was corrupted'
             ));
         }
+    }
+
+    public function __toString(): string
+    {
+        return self::class.' ('.$this->filePath.')';
     }
 
 

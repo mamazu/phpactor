@@ -6,7 +6,7 @@ use Phpactor\Indexer\Model\MemberReference;
 use Phpactor\Indexer\Model\Record;
 use RuntimeException;
 
-class MemberRecord implements HasFileReferences, Record, HasShortName
+class MemberRecord implements HasFileReferences, Record, HasShortName, \Stringable
 {
     use HasFileReferencesTrait;
     public const RECORD_TYPE = 'member';
@@ -99,5 +99,10 @@ class MemberRecord implements HasFileReferences, Record, HasShortName
     public function shortName(): string
     {
         return $this->memberName;
+    }
+
+    public function __toString(): string
+    {
+        return self::class.' ('.$this->identifier().')';
     }
 }

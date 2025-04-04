@@ -4,7 +4,7 @@ namespace Phpactor\Indexer\Model\Record;
 
 use Phpactor\Indexer\Model\Record;
 
-final class FunctionRecord implements HasFileReferences, HasPath, Record, HasFullyQualifiedName
+final class FunctionRecord implements HasFileReferences, HasPath, Record, HasFullyQualifiedName, \Stringable
 {
     use FullyQualifiedReferenceTrait;
     use HasFileReferencesTrait;
@@ -20,5 +20,10 @@ final class FunctionRecord implements HasFileReferences, HasPath, Record, HasFul
     public function recordType(): string
     {
         return self::RECORD_TYPE;
+    }
+
+    public function __toString(): string
+    {
+        return self::class.' ('.$this->fqn.')';
     }
 }
