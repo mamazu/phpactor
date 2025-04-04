@@ -36,6 +36,7 @@ class SqliteIndex implements Index
 
     public function __construct(
         private SQLite3 $db,
+        private string $path,
         private LoggerInterface $logger,
     ) {
         // Create class table
@@ -111,34 +112,40 @@ class SqliteIndex implements Index
     {
         if ($record instanceof ClassRecord) {
             $tableName = self::CLASS_TABLE_NAME;
-            $statement = $this->db->prepare("SELECT * FROM {$tableName} WHERE fqn = :fqn AND type = :type;");
-            $statement->bindValue(':type', $record->type());
-            $statement->bindValue(':fqn', $record->fqn());
+            $sql = "SELECT * FROM {$tableName} WHERE fqn = :fqn";
+            $args =[':fqn', $record->fqn()];
 
-            $result = $statement->execute()->fetchArray();
-            if ($result !== false) {
-                dump($result);
-                dd('Mapping class');
-            } else {
-                dump('Found no class matching');
+            if ($record->type() !== null) {
+                $sql .= ' AND type = :type';
+                $args[':type'] = $record->type();
             }
+
+            $statement = $this->db->prepare($sql .';');
+            foreach ($args as $key => $value) {
+                $statement->bindValue($key, $value);
+            }
+            $result = $statement->execute()->fetchArray(\SQLITE3_ASSOC);
+            if ($result !== false) {
+                $record->setType($result['type']);
+                $record->setStart(ByteOffset::fromInt($result['start']));
+                $record->setEnd(ByteOffset::fromInt($result['end']));
+                $record->setFilePath(TextDocumentUri::fromString($result['file_path']));
+                $record->setFlags($result['flags']);
+            }
+
             return $record;
         }
 
         if ($record instanceof FileRecord) {
-            dump($record);
-            dump($record->filePath());
             $tableName = self::FILE_TABLE_NAME;
             $statement = $this->db->prepare("SELECT * FROM ${tableName} WHERE file_path = :filePath;");
             $statement->bindValue(':filePath', $record->filePath());
 
-            $result = $statement->execute()->fetchArray();
+            $result = $statement->execute()->fetchArray(\SQLITE3_ASSOC);
             if ($result !== false) {
-                dump($result);
-                dd('Mapping file');
-            } else {
-                dump('Found no file matching');
+                $record->setFilePath(TextDocumentUri::fromString($result['file_path']));
             }
+
             return $record;
         }
 
@@ -219,6 +226,10 @@ class SqliteIndex implements Index
     public function write(Record $record): void
     {
         if ($record instanceof ClassRecord) {
+            // Do not index partial records
+            if ($record->type() === null) {
+                return;
+            }
             $tableName = self::CLASS_TABLE_NAME;
             $statement = $this->db->prepare(
                 "INSERT INTO {$tableName} VALUES (:type, :fqn, :start, :end, :path, :flags)
@@ -236,9 +247,16 @@ class SqliteIndex implements Index
         }
         if ($record instanceof FileRecord) {
             $tableName = self::FILE_TABLE_NAME;
-            $statement = $this->db->prepare(
-                "INSERT OR IGNORE INTO {$tableName} VALUES (:filePath)",
-            );
+            $statement = $this->db->prepare("INSERT OR IGNORE INTO {$tableName} VALUES (:filePath)");
+            $statement->bindValue(':filePath', $record->filePath());
+
+            //todo: references
+            //if (count($record->references()->toArray()) > 0) {
+                //dump($record->references()->toArray());
+                //dd('References detected');
+            //}
+            Assert::notFalse($statement->execute());
+
             return;
         }
 
@@ -306,6 +324,7 @@ class SqliteIndex implements Index
 
     public function done(): void
     {
-        return;
+        $this->db->close();
+        $this->db->open($this->path);
     }
 }

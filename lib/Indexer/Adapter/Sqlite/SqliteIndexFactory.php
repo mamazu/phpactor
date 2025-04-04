@@ -23,6 +23,6 @@ class SqliteIndexFactory implements IndexFactoryInterface
         $sqlite->enableExceptions(true);
         $sqlite->enableExtendedResultCodes(true);
 
-        return new SqliteIndex($sqlite, $this->logger);
+        return new SqliteIndex($sqlite, $this->path, $this->logger);
     }
 }
