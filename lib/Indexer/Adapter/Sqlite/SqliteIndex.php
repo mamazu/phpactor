@@ -17,19 +17,15 @@ use Phpactor\Indexer\Model\Record\ClassRecord;
 use Webmozart\Assert\Assert;
 use Phpactor\Indexer\Model\Record\MemberRecord;
 use Phpactor\TextDocument\ByteOffset;
+use RuntimeException;
 
 class SqliteIndex implements Index
 {
     use SqliteHelper;
-
     private const CLASS_TABLE_NAME = 'class_index';
-
     private const MEMBER_TABLE_NAME = 'member_index';
-
     private const FUNCTION_TABLE_NAME = 'function_index';
-
     private const FILE_TABLE_NAME = 'file_index';
-
     private const FILE_REFERENCE_TABLE_NAME = 'file_refence_index';
 
     private array $records = [];
@@ -60,7 +56,8 @@ class SqliteIndex implements Index
         $tableName = self::FILE_TABLE_NAME;
         if (!$this->tableExists($this->db, $tableName)) {
             $this->db->exec("CREATE TABLE {$tableName} (
-                file_path TEXT UNIQUE NOT NULL
+                file_path TEXT UNIQUE NOT NULL,
+                updated_at DATETIME NOT NULL
             );
             ");
         }
@@ -160,7 +157,7 @@ class SqliteIndex implements Index
                 dump($result);
                 dd('Mapping member');
             } else {
-                dump('Found no member matching');
+                // dump('Found no member matching');
             }
             return $record;
         }
@@ -247,13 +244,13 @@ class SqliteIndex implements Index
         }
         if ($record instanceof FileRecord) {
             $tableName = self::FILE_TABLE_NAME;
-            $statement = $this->db->prepare("INSERT OR IGNORE INTO {$tableName} VALUES (:filePath)");
+            $statement = $this->db->prepare("INSERT OR IGNORE INTO {$tableName} VALUES (:filePath, datetime('now'))");
             $statement->bindValue(':filePath', $record->filePath());
 
             //todo: references
             //if (count($record->references()->toArray()) > 0) {
-                //dump($record->references()->toArray());
-                //dd('References detected');
+            //dump($record->references()->toArray());
+            //dd('References detected');
             //}
             Assert::notFalse($statement->execute());
 
@@ -304,13 +301,28 @@ class SqliteIndex implements Index
             return;
         }
 
-        dump('Writing', $record);
         Assert::true(false, 'No writer defined for records of type: ' . $record->recordType());
     }
 
     public function isFresh(SplFileInfo $fileInfo): bool
     {
-        return false;
+        $tableName = self::FILE_TABLE_NAME;
+        $statement = $this->db->prepare("SELECT updated_at FROM ${tableName} WHERE file_path = :filePath;");
+        $statement->bindValue(':filePath', 'file://'.$fileInfo->getRealPath());
+
+        $result = $statement->execute()->fetchArray(\SQLITE3_ASSOC);
+        if ($result === false) {
+            return false;
+        }
+
+        try {
+            $mtime = $fileInfo->getCTime();
+        } catch (RuntimeException) {
+            // file likely doesn't exist
+            return false;
+        }
+
+        return new \DateTimeImmutable($result['updated_at'])->getTimestamp() > $mtime;
     }
 
     public function reset(): void
