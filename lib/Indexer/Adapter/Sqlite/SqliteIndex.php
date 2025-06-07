@@ -18,6 +18,7 @@ use Webmozart\Assert\Assert;
 use Phpactor\Indexer\Model\Record\MemberRecord;
 use Phpactor\TextDocument\ByteOffset;
 use RuntimeException;
+use DateTimeImmutable;
 
 class SqliteIndex implements Index
 {
@@ -322,12 +323,21 @@ class SqliteIndex implements Index
             return false;
         }
 
-        return new \DateTimeImmutable($result['updated_at'])->getTimestamp() > $mtime;
+        return new DateTimeImmutable($result['updated_at'])->getTimestamp() > $mtime;
     }
 
     public function reset(): void
     {
-        // Delete all indexing tables
+        $tablesToClear = [
+        self::CLASS_TABLE_NAME ,
+        self::MEMBER_TABLE_NAME ,
+        self::FUNCTION_TABLE_NAME ,
+        self::FILE_TABLE_NAME ,
+            self::FILE_REFERENCE_TABLE_NAME ,
+        ];
+        foreach ($tablesToClear as $table) {
+            $this->db->exec("DELETE FROM ${table}");
+        }
     }
 
     public function exists(): bool

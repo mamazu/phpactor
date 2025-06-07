@@ -5,8 +5,9 @@ namespace Phpactor\Indexer\Model\Record;
 use Attribute;
 use Phpactor\Indexer\Model\Name\FullyQualifiedName;
 use Phpactor\Indexer\Model\Record;
+use Stringable;
 
-final class ClassRecord implements Record, HasFileReferences, HasFlags, HasPath, HasFullyQualifiedName, \Stringable
+final class ClassRecord implements Record, HasFileReferences, HasFlags, HasPath, HasFullyQualifiedName, Stringable
 {
     use FullyQualifiedReferenceTrait;
     use HasFileReferencesTrait;
@@ -41,6 +42,11 @@ final class ClassRecord implements Record, HasFileReferences, HasFlags, HasPath,
      * Type of "class": class, interface or trait, etc
      */
     private ?string $type = null;
+
+    public function __toString(): string
+    {
+        return self::class.' ('.$this->fqn.')';
+    }
 
     public static function fromName(string $name): self
     {
@@ -120,10 +126,5 @@ final class ClassRecord implements Record, HasFileReferences, HasFlags, HasPath,
         $clone = clone $this;
         $clone->type = $type;
         return $clone;
-    }
-
-    public function __toString(): string
-    {
-        return self::class.' ('.$this->fqn.')';
     }
 }
