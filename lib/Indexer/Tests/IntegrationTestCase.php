@@ -55,8 +55,7 @@ class IntegrationTestCase extends TestCase
         return IndexAgentBuilder::create(
             $this->workspace()->path('repo'),
             $this->workspace()->path($path),
-        )->setReferenceEnhancer(
-            new WorseRecordReferenceEnhancer(
+            referenceEnhancer: new WorseRecordReferenceEnhancer(
                 $this->createReflector(),
                 $this->createLogger(),
                 new FilesystemTextDocumentLocator(),

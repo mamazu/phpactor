@@ -37,12 +37,13 @@ abstract class RenamerTestCase extends TestCase
             ->build();
         $this->indexAgent = IndexAgentBuilder::create(
             $this->workspace()->path('index'),
-            $this->workspace()->path('project')
-        )->setReferenceEnhancer(new WorseRecordReferenceEnhancer(
-            $this->reflector,
-            new NullLogger(),
-            new FilesystemTextDocumentLocator(),
-        ))->buildAgent();
+            $this->workspace()->path('project'),
+            referenceEnhancer: new WorseRecordReferenceEnhancer(
+                $this->reflector,
+                new NullLogger(),
+                new FilesystemTextDocumentLocator(),
+            )
+        )->buildAgent();
     }
 
     /**

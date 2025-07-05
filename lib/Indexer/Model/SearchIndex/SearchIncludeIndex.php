@@ -48,4 +48,9 @@ class SearchIncludeIndex implements SearchIndex
     {
         $this->innerIndex->flush();
     }
+
+    public function reset(): void
+    {
+        $this->innerIndex->reset();
+    }
 }

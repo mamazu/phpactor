@@ -27,6 +27,7 @@ use Phpactor\Indexer\Model\TestIndexAgent;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Phpactor\Indexer\Model\SearchIndex;
+use Phpactor\Indexer\Model\RecordReferenceEnhancer;
 
 final class IndexAgentBuilder
 {
@@ -84,14 +85,18 @@ final class IndexAgentBuilder
         $this->logger = new NullLogger();
     }
 
-    public static function create(string $indexRootPath, string $projectRoot): self
-    {
+    public static function create(
+        string $indexRootPath,
+        string $projectRoot,
+        ?RecordReferenceEnhancer $referenceEnhancer = null,
+    ): self {
+        $referenceEnhancer ??= new NullRecordReferenceEnhancer();
         return new self(
             $indexRootPath,
             $projectRoot,
             new FileSearchIndexBuilder($indexRootPath),
-            new FileIndexFactory($this->indexRoot, $this->logger),
-            new QueryClientBuilder(new NullRecordReferenceEnhancer()),
+            new FileIndexFactory($indexRootPath, new NullLogger()),
+            new QueryClientBuilder($referenceEnhancer),
         );
     }
 
