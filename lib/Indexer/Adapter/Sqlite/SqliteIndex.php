@@ -23,11 +23,12 @@ use DateTimeImmutable;
 class SqliteIndex implements Index
 {
     use SqliteHelper;
-    private const CLASS_TABLE_NAME = 'class_index';
-    private const MEMBER_TABLE_NAME = 'member_index';
-    private const FUNCTION_TABLE_NAME = 'function_index';
-    private const FILE_TABLE_NAME = 'file_index';
-    private const FILE_REFERENCE_TABLE_NAME = 'file_refence_index';
+    public const CLASS_TABLE_NAME = 'class_index';
+    public const MEMBER_TABLE_NAME = 'member_index';
+    public const CONST_TABLE_NAME = 'constant_index';
+    public const FUNCTION_TABLE_NAME = 'function_index';
+    public const FILE_TABLE_NAME = 'file_index';
+    public const FILE_REFERENCE_TABLE_NAME = 'file_refence_index';
 
     private array $records = [];
 
@@ -36,74 +37,7 @@ class SqliteIndex implements Index
         private string $path,
         private LoggerInterface $logger,
     ) {
-        // Create class table
-        $tableName = self::CLASS_TABLE_NAME;
-        if (!$this->tableExists($this->db, $tableName)) {
-            $this->db->exec("CREATE TABLE {$tableName} (
-                type TEXT,
-                fqn TEXT,
-                start INTEGER,
-                end INTEGER NULL,
-                file_path TEXT,
-                flags INTEGER
-            );
-            CREATE INDEX ${tableName}_type ON ${tableName} (type);
-            CREATE INDEX ${tableName}_fqn ON ${tableName} (fqn);
-            CREATE UNIQUE INDEX ${tableName}_type_fqn ON ${tableName} (type, fqn);
-            ");
-        }
-
-        // Create file table
-        $tableName = self::FILE_TABLE_NAME;
-        if (!$this->tableExists($this->db, $tableName)) {
-            $this->db->exec("CREATE TABLE {$tableName} (
-                file_path TEXT UNIQUE NOT NULL,
-                updated_at DATETIME NOT NULL
-            );
-            ");
-        }
-
-        // Create file reference table
-        $tableName = self::FILE_REFERENCE_TABLE_NAME;
-        if (!$this->tableExists($this->db, $tableName)) {
-            $this->db->exec("CREATE TABLE {$tableName} (
-                file_id INTEGER,
-                reference_type TEXT,
-                reference_identifier TEXT,
-                reference_start INTEGER NOT NULL,
-                reference_container_type TEXT,
-                reference_flags INTEGER,
-                reference_end INTEGER
-            );
-            ");
-        }
-
-        // Create member table
-        $tableName = self::MEMBER_TABLE_NAME;
-        if (!$this->tableExists($this->db, $tableName)) {
-            $this->db->exec("CREATE TABLE {$tableName} (
-                type TEXT,
-                member_name TEXT,
-                container_type TEXT NULLALBE
-            );
-            CREATE INDEX ${tableName}_type ON ${tableName} (type);
-            CREATE INDEX ${tableName}_member_name ON ${tableName} (member_name);
-            CREATE UNIQUE INDEX ${tableName}_type_fqn ON ${tableName} (type, member_name);
-            ");
-        }
-
-        // Create function table
-        $tableName = self::FUNCTION_TABLE_NAME;
-        if (!$this->tableExists($this->db, $tableName)) {
-            $this->db->exec("CREATE TABLE {$tableName} (
-                fqn TEXT,
-                start INTEGER NULLABLE,
-                end INTEGER NULLABLE,
-                file_path TEXT NULLABLE
-            );
-            CREATE UNIQUE INDEX ${tableName}_fqn ON ${tableName} (fqn);
-            ");
-        }
+        $this->createTables();
     }
 
     public function get(Record $record): Record
@@ -118,11 +52,7 @@ class SqliteIndex implements Index
                 $args[':type'] = $record->type();
             }
 
-            $statement = $this->db->prepare($sql .';');
-            foreach ($args as $key => $value) {
-                $statement->bindValue($key, $value);
-            }
-            $result = $statement->execute()->fetchArray(\SQLITE3_ASSOC);
+            $result = $this->queryArrayPrepared($sql .';', $args);
             if ($result !== false) {
                 $record->setType($result['type']);
                 $record->setStart(ByteOffset::fromInt($result['start']));
@@ -136,10 +66,11 @@ class SqliteIndex implements Index
 
         if ($record instanceof FileRecord) {
             $tableName = self::FILE_TABLE_NAME;
-            $statement = $this->db->prepare("SELECT * FROM ${tableName} WHERE file_path = :filePath;");
-            $statement->bindValue(':filePath', $record->filePath());
+            $result = $this->queryArrayPrepared(
+                "SELECT * FROM ${tableName} WHERE file_path = :filePath;",
+                [ ':filePath' => $record->filePath()],
+            );
 
-            $result = $statement->execute()->fetchArray(\SQLITE3_ASSOC);
             if ($result !== false) {
                 $record->setFilePath(TextDocumentUri::fromString($result['file_path']));
             }
@@ -149,26 +80,40 @@ class SqliteIndex implements Index
 
         if ($record instanceof MemberRecord) {
             $tableName = self::MEMBER_TABLE_NAME;
-            $statement = $this->db->prepare("SELECT * FROM ${tableName} WHERE type = :type AND member_name = :memberName;");
-            $statement->bindValue(':type', $record->type());
-            $statement->bindValue(':member_name', $record->memberName());
 
-            $result = $statement->execute()->fetchArray(\SQLITE3_ASSOC);
+            $result = $this->queryArrayPrepared(
+                "SELECT * FROM ${tableName} WHERE type = :type AND member_name = :memberName;",
+                [':type' => $record->type(), ':member_name' => $record->memberName()]
+            );
+
             if ($result !== false) {
                 dump($result);
                 dd('Mapping member');
-            } else {
-                // dump('Found no member matching');
+            }
+            return $record;
+        }
+
+        if ($record instanceof ConstantRecord) {
+            $tableName = self::CONST_TABLE_NAME;
+            $result = $this->queryArrayPrepared(
+                "SELECT * FROM ${tableName} WHERE fqn = :fqn;",
+                [':fqn'=> $record->fqn()],
+            );
+
+            if ($result !== false) {
+                $record->setStart(ByteOffset::fromInt($result['start']));
+                $record->setEnd(ByteOffset::fromInt($result['end']));
+                $record->setFilePath(TextDocumentUri::fromString($result['file_path']));
             }
             return $record;
         }
 
         if ($record instanceof FunctionRecord) {
             $tableName = self::FUNCTION_TABLE_NAME;
-            $statement = $this->db->prepare("SELECT * FROM ${tableName} WHERE fqn = :fqn;");
-            $statement->bindValue(':fqn', $record->fqn());
-
-            $result = $statement->execute()->fetchArray(\SQLITE3_ASSOC);
+            $result = $this->queryArrayPrepared(
+                "SELECT * FROM ${tableName} WHERE fqn = :fqn;",
+                [':fqn'=> $record->fqn()],
+            );
             if ($result !== false) {
                 $record->setStart(ByteOffset::fromInt($result['start']));
                 $record->setEnd(ByteOffset::fromInt($result['end']));
@@ -179,10 +124,7 @@ class SqliteIndex implements Index
             return $record;
         }
 
-        //$statement = $this->db->prepare("SELECT record_type, identifier, type, flags FROM ${tableName} WHERE record_type = :record_type AND identifier = :identifier;");
-        //$statement->bindValue(':record_type', $record->recordType());
-        //$statement->bindValue(':identifier', $record->identifier());
-
+        dd('Unknown record type: ' . $record::class);
         return $record;
     }
 
@@ -276,7 +218,7 @@ class SqliteIndex implements Index
             $tableName = self::FUNCTION_TABLE_NAME;
             $statement = $this->db->prepare(
                 "INSERT INTO {$tableName} VALUES (:fqn, :start, :end, :filePath)
-                ON CONFLICT DO UPDATE SET fqn = :fqn, start = :start, end = :end, file_path = :filePath WHERE fqn = :fqn",
+                ON CONFLICT DO UPDATE SET start = :start, end = :end, file_path = :filePath WHERE fqn = :fqn",
             );
             $statement->bindValue(':fqn', $record->fqn());
             $statement->bindValue(':start', $record->start()?->toInt());
@@ -288,10 +230,10 @@ class SqliteIndex implements Index
         }
 
         if ($record instanceof ConstantRecord) {
-            $tableName = self::FUNCTION_TABLE_NAME;
+            $tableName = self::CONST_TABLE_NAME;
             $statement = $this->db->prepare(
-                "INSERT INTO {$tableName} VALUES (:fqn, :start, :end, :filePath)
-                ON CONFLICT DO UPDATE SET fqn = :fqn, start = :start, end = :end, file_path = :filePath WHERE fqn = :fqn",
+                "INSERT INTO {$tableName}(fqn, start, end, file_path) VALUES (:fqn, :start, :end, :filePath)
+                ON CONFLICT DO UPDATE SET start = :start, end = :end, file_path = :filePath WHERE fqn = :fqn",
             );
             $statement->bindValue(':fqn', $record->fqn());
             $statement->bindValue(':start', $record->start()?->toInt());
@@ -329,24 +271,113 @@ class SqliteIndex implements Index
     public function reset(): void
     {
         $tablesToClear = [
-        self::CLASS_TABLE_NAME ,
-        self::MEMBER_TABLE_NAME ,
-        self::FUNCTION_TABLE_NAME ,
-        self::FILE_TABLE_NAME ,
+            self::CLASS_TABLE_NAME ,
+            self::MEMBER_TABLE_NAME ,
+            self::CONST_TABLE_NAME,
+            self::FUNCTION_TABLE_NAME ,
+            self::FILE_TABLE_NAME ,
             self::FILE_REFERENCE_TABLE_NAME ,
         ];
         foreach ($tablesToClear as $table) {
-            $this->db->exec("DELETE FROM ${table}");
+            $this->db->exec("DROP TABLE ${table}");
         }
+
+        $this->createTables();
     }
 
     public function exists(): bool
     {
+        return true;
     }
 
     public function done(): void
     {
         $this->db->close();
         $this->db->open($this->path);
+    }
+
+    private function createTables(): void
+    {
+        // Create class table
+        $tableName = self::CLASS_TABLE_NAME;
+        if (!$this->tableExists($this->db, $tableName)) {
+            $this->db->exec("CREATE TABLE {$tableName} (
+                type TEXT,
+                fqn TEXT,
+                start INTEGER,
+                end INTEGER NULL,
+                file_path TEXT,
+                flags INTEGER
+            );
+            CREATE INDEX ${tableName}_type ON ${tableName} (type);
+            CREATE INDEX ${tableName}_fqn ON ${tableName} (fqn);
+            CREATE UNIQUE INDEX ${tableName}_type_fqn ON ${tableName} (type, fqn);
+            ");
+        }
+
+        // Create file table
+        $tableName = self::FILE_TABLE_NAME;
+        if (!$this->tableExists($this->db, $tableName)) {
+            $this->db->exec("CREATE TABLE {$tableName} (
+                file_path TEXT UNIQUE NOT NULL,
+                updated_at DATETIME NOT NULL
+            );
+            ");
+        }
+
+        // Create file reference table
+        $tableName = self::FILE_REFERENCE_TABLE_NAME;
+        if (!$this->tableExists($this->db, $tableName)) {
+            $this->db->exec("CREATE TABLE {$tableName} (
+                file_id INTEGER,
+                reference_type TEXT,
+                reference_identifier TEXT,
+                reference_start INTEGER NOT NULL,
+                reference_container_type TEXT,
+                reference_flags INTEGER,
+                reference_end INTEGER
+            );
+            ");
+        }
+
+        // Create member table
+        $tableName = self::MEMBER_TABLE_NAME;
+        if (!$this->tableExists($this->db, $tableName)) {
+            $this->db->exec("CREATE TABLE {$tableName} (
+                type TEXT,
+                member_name TEXT,
+                container_type TEXT NULLALBE
+            );
+            CREATE INDEX ${tableName}_type ON ${tableName} (type);
+            CREATE INDEX ${tableName}_member_name ON ${tableName} (member_name);
+            CREATE UNIQUE INDEX ${tableName}_type_fqn ON ${tableName} (type, member_name);
+            ");
+        }
+
+        // Create constant table
+        $tableName = self::CONST_TABLE_NAME;
+        if (!$this->tableExists($this->db, $tableName)) {
+            $this->db->exec("CREATE TABLE {$tableName} (
+                fqn TEXT,
+                file_path TEXT,
+                start INTEGER,
+                end INTEGER NULLABLE
+            );
+            CREATE UNIQUE INDEX ${tableName}_fqn ON ${tableName} (fqn);
+            ");
+        }
+
+        // Create function table
+        $tableName = self::FUNCTION_TABLE_NAME;
+        if (!$this->tableExists($this->db, $tableName)) {
+            $this->db->exec("CREATE TABLE {$tableName} (
+                fqn TEXT,
+                start INTEGER NULLABLE,
+                end INTEGER NULLABLE,
+                file_path TEXT NULLABLE
+            );
+            CREATE UNIQUE INDEX ${tableName}_fqn ON ${tableName} (fqn);
+            ");
+        }
     }
 }
