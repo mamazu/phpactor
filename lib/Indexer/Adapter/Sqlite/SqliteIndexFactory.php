@@ -22,6 +22,7 @@ class SqliteIndexFactory implements IndexFactoryInterface
         $sqlite = new SQLite3($this->path);
         $sqlite->enableExceptions(true);
         $sqlite->enableExtendedResultCodes(true);
+        $sqlite->exec('PRAGMA journal_mode= WAL;');
 
         return new SqliteIndex($sqlite, $this->path, $this->logger);
     }
