@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Phpactor\Indexer\Adapter\Sqlite;
 
+use Phpactor\Indexer\Model\MemberReference;
 use Phpactor\Indexer\Model\Record\ConstantRecord;
 use Phpactor\Indexer\Model\Record\FileRecord;
 use Phpactor\Indexer\Model\Record\FunctionRecord;
@@ -19,6 +20,7 @@ use Phpactor\Indexer\Model\Record\MemberRecord;
 use Phpactor\TextDocument\ByteOffset;
 use RuntimeException;
 use DateTimeImmutable;
+use InvalidArgumentException;
 
 class SqliteIndex implements Index
 {
@@ -132,30 +134,59 @@ class SqliteIndex implements Index
     {
         if ($record instanceof ClassRecord) {
             $tableName = self::CLASS_TABLE_NAME;
-            $statement = $this->db->prepare("SELECT COUNT(*) FROM ${tableName} WHERE type = :type AND fqn = :fqn;");
-            $statement->bindValue(':type', $record->type());
-            $statement->bindValue(':fqn', $record->fqn());
-            $result = $statement->execute();
-            $count = $result->fetchArray(\SQLITE3_NUM)[0];
+            $result = $this->queryArrayPrepared(
+                "SELECT COUNT(*) as amount FROM ${tableName} WHERE type = :type AND fqn = :fqn;",
+                [
+                    ':type' => $record->type(),
+                    ':fqn' => $record->fqn()
+                ]
+            );
 
-            return $count > 0;
+            return $result['amount'] > 0;
         }
 
         if ($record instanceof FileRecord) {
             $tableName = self::FILE_TABLE_NAME;
-            $statement = $this->db->prepare("SELECT COUNT(*) FROM ${tableName} WHERE file_path = :filePath;");
-            $statement->bindValue(':filePath', $record->filePath());
-            $result = $statement->execute();
-            $count = $result->fetchArray(\SQLITE3_NUM)[0];
+            $result = $this->queryArrayPrepared(
+                "SELECT COUNT(*) as amount FROM ${tableName} WHERE file_path = :filePath;",
+                [':filePath' => $record->filePath()]
+            );
+
+            return $result['amount'] > 0;
         }
 
-        $tableName = self::TABLE_NAME;
-        $statement = $this->db->prepare("SELECT COUNT(*) FROM ${tableName} WHERE record_type = :record_type;");
-        $statement->bindValue(':record_type', $record->recordType());
-        $result = $statement->execute();
-        $count = $result->fetchArray(\SQLITE3_NUM)[0];
+        if ($record instanceof MemberRecord) {
+            $tableName = self::MEMBER_TABLE_NAME;
+            $result = $this->queryArrayPrepared(
+                "SELECT COUNT(*) as amount FROM ${tableName} WHERE type = :type and member_name = :memberName;",
+                [
+                    ':type' => $record->type(),
+                    ':memberName' => $record->shortName()
+                ]
+            );
 
-        return $count > 0;
+            return $result['amount'] > 0;
+        }
+
+        if ($record instanceof FunctionRecord) {
+            $tableName = self::FUNCTION_TABLE_NAME;
+            $result = $this->queryArrayPrepared(
+                "SELECT COUNT(*) as amount FROM ${tableName} WHERE fqn = :fqn;",
+                [':fqn'=> $record->fqn()],
+            );
+            return $result['amount'] > 0;
+        }
+
+        if ($record instanceof ConstantRecord) {
+            $tableName = self::CONST_TABLE_NAME;
+            $result = $this->queryArrayPrepared(
+                "SELECT COUNT(*) as amount FROM ${tableName} WHERE fqn = :fqn;",
+                [':fqn'=> $record->fqn()],
+            );
+            return $result['amount'] > 0;
+        }
+
+        throw new InvalidArgumentException('Unknown Record class: ' . $record::class);
     }
 
     public function lastUpdate(): int
