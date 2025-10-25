@@ -32,7 +32,7 @@ class SqliteIndex implements Index
     public const FILE_TABLE_NAME = 'file_index';
     public const FILE_REFERENCE_TABLE_NAME = 'file_refence_index';
 
-    private array $records = [];
+    private array $unflushedRecords = [];
 
     public function __construct(
         private SQLite3 $db,
@@ -218,15 +218,45 @@ class SqliteIndex implements Index
         }
         if ($record instanceof FileRecord) {
             $tableName = self::FILE_TABLE_NAME;
-            $statement = $this->db->prepare("INSERT OR IGNORE INTO {$tableName} VALUES (:filePath, datetime('now'))");
-            $statement->bindValue(':filePath', $record->filePath());
+            $id = $this->queryArrayPrepared(
+                "SELECT rowid FROM {$tableName} WHERE file_path = :filePath;",
+                [':filePath' => $record->filePath()],
+            );
 
-            //todo: references
-            //if (count($record->references()->toArray()) > 0) {
-            //dump($record->references()->toArray());
-            //dd('References detected');
-            //}
-            Assert::notFalse($statement->execute());
+            if ($id === false) {
+                $stmt = $this->db->exec("INSERT INTO {$tableName} VALUES (:filePath, current_timestamp);");
+                $stmt->bindValue(':filePath', $record->filePath());
+                Assert::notFalse($stmt->execute(), 'Failed to create entry into file table');
+
+                $fileId = $this->db->lastInsertRowID;
+            } else {
+                $fileId = $id['rowid'];
+
+                $result = $this->db->exec("UPDATE {$tableName} SET updated_at = current_timestamp WHERE file_path = :filePath;");
+                Assert::notFalse($result);
+            }
+
+            $referenceTableName = self::FILE_REFERENCE_TABLE_NAME;
+            // Clear references and recreate them
+            $deleteStmt = $this->db->prepare("DELETE FROM {$referenceTableName} WHERE file_id = :fileId");
+            $deleteStmt->bindValue('fileId', $fileId);
+            $deleteStmt->execute();
+
+            $query= "INSERT INTO {$referenceTableName} VALUES ";
+            foreach ($record->references() as $reference) {
+                $query .= sprintf(
+                    '( "%s", "%s", "%s", "%s", "%s", "%s", "%s"),',
+                    $fileId,
+                    $reference->type(),
+                    $reference->identifier(),
+                    $reference->start(),
+                    $reference->contaninerType(),
+                    $reference->flags(),
+                    $reference->end(),
+                );
+            }
+            $query = rtim(',', $query);
+            Assert::notFalse($this->db->execute($query), 'Unable to insert references');
 
             return;
         }
@@ -301,6 +331,7 @@ class SqliteIndex implements Index
 
     public function reset(): void
     {
+        $this->unflushedRecords = [];
         $tablesToClear = [
             self::CLASS_TABLE_NAME ,
             self::MEMBER_TABLE_NAME ,

@@ -22,8 +22,11 @@ class SearchAwareIndex implements Index
 
     public function write(Record $record): void
     {
+        $timer = microtime(true);
         $this->innerIndex->write($record);
         $this->search->write($record);
+
+        dump($record::class. ' ' . (microtime(true) - $timer));
     }
 
     public function isFresh(SplFileInfo $fileInfo): bool
