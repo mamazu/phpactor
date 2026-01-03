@@ -10,7 +10,6 @@ use Phpactor\Indexer\Model\FileList;
 use Phpactor\Indexer\Model\FileListProvider;
 use Phpactor\Indexer\Model\Index;
 use Phpactor\TextDocument\TextDocumentUri;
-use RuntimeException;
 use SQLite3;
 use SplFileInfo;
 

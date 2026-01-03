@@ -74,7 +74,7 @@ final class IndexAgentBuilder
 
     private LoggerInterface $logger;
 
-    private function __construct(
+    public function __construct(
         private string $indexRoot,
         private string $projectRoot,
         private SearchIndexBuilderInterface $searchBuilder,

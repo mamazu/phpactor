@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Phpactor\Indexer\Adapter\Sqlite;
 
-use Phpactor\Indexer\Model\MemberReference;
 use Phpactor\Indexer\Model\Record\ConstantRecord;
 use Phpactor\Indexer\Model\Record\FileRecord;
 use Phpactor\Indexer\Model\Record\FunctionRecord;
@@ -31,8 +30,6 @@ class SqliteIndex implements Index
     public const FUNCTION_TABLE_NAME = 'function_index';
     public const FILE_TABLE_NAME = 'file_index';
     public const FILE_REFERENCE_TABLE_NAME = 'file_refence_index';
-
-    private array $unflushedRecords = [];
 
     public function __construct(
         private SQLite3 $db,
@@ -219,13 +216,13 @@ class SqliteIndex implements Index
         if ($record instanceof FileRecord) {
             $tableName = self::FILE_TABLE_NAME;
             $id = $this->queryArrayPrepared(
-                "SELECT rowid FROM {$tableName} WHERE file_path = :filePath;",
+                "SELECT rowid FROM {$tableName} WHERE file_path = :filePath",
                 [':filePath' => $record->filePath()],
             );
 
             if ($id === false) {
-                $stmt = $this->db->exec("INSERT INTO {$tableName} VALUES (:filePath, current_timestamp);");
-                $stmt->bindValue(':filePath', $record->filePath());
+                $stmt = $this->db->prepare("INSERT INTO {$tableName} (file_path, updated_at) VALUES (:file_path, current_timestamp);");
+                $stmt->bindValue(':file_path', $record->filePath());
                 Assert::notFalse($stmt->execute(), 'Failed to create entry into file table');
 
                 $fileId = $this->db->lastInsertRowID;
@@ -255,8 +252,8 @@ class SqliteIndex implements Index
                     $reference->end(),
                 );
             }
-            $query = rtim(',', $query);
-            Assert::notFalse($this->db->execute($query), 'Unable to insert references');
+            $query = rtrim(',', $query);
+            Assert::notFalse($this->db->exec($query), 'Unable to insert references');
 
             return;
         }
@@ -331,7 +328,6 @@ class SqliteIndex implements Index
 
     public function reset(): void
     {
-        $this->unflushedRecords = [];
         $tablesToClear = [
             self::CLASS_TABLE_NAME ,
             self::MEMBER_TABLE_NAME ,

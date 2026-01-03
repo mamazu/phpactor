@@ -16,19 +16,7 @@ class FileRepository
      */
     private const VERSION = 3;
 
-    /**
-     * Flush to the filesystem after BATCH_SIZE updates
-     */
-    private const BATCH_SIZE = 10000;
-
     private int $lastUpdate;
-
-    /**
-     * @var array<string,Record>
-     */
-    private array $buffer = [];
-
-    private int $counter = 0;
 
     public function __construct(
         private string $path,
@@ -40,11 +28,9 @@ class FileRepository
 
     public function put(Record $record): void
     {
-        $this->buffer[$this->bufferKey($record)] = $record;
-
-        if (++$this->counter % self::BATCH_SIZE === 0) {
-            $this->flush();
-        }
+        $path = $this->pathFor($record);
+        $this->ensureDirectoryExists(dirname($path));
+        file_put_contents($path, $this->serializer->serialize($record));
     }
 
     /**
@@ -54,13 +40,6 @@ class FileRepository
      */
     public function get(Record $record): ?Record
     {
-        $bufferKey = $this->bufferKey($record);
-
-        if (isset($this->buffer[$bufferKey])) {
-            /** @phpstan-ignore-next-line */
-            return $this->buffer[$bufferKey];
-        }
-
         $path = $this->pathFor($record);
 
         if (!file_exists($path)) {
@@ -134,16 +113,6 @@ class FileRepository
         ));
     }
 
-    public function flush(): void
-    {
-        foreach ($this->buffer as $record) {
-            $path = $this->pathFor($record);
-            $this->ensureDirectoryExists(dirname($path));
-            file_put_contents($path, $this->serializer->serialize($record));
-        }
-        $this->buffer = [];
-    }
-
     private function ensureDirectoryExists(string $path): void
     {
         if (file_exists($path)) {
@@ -179,8 +148,4 @@ class FileRepository
         );
     }
 
-    private function bufferKey(Record $record): string
-    {
-        return $record->recordType().$record->identifier();
-    }
 }
