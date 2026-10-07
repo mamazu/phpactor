@@ -3,7 +3,6 @@
 namespace Phpactor\Extension\PHPUnit;
 
 use Phpactor\CodeTransform\Adapter\WorseReflection\Refactor\WorseOverrideMethod;
-use Phpactor\CodeTransform\Domain\Refactor\OverrideMethod;
 use Phpactor\Container\ContainerBuilder;
 use Phpactor\Container\Container;
 use Phpactor\Container\OptionalExtension;
@@ -17,7 +16,9 @@ use Phpactor\Extension\WorseReflection\WorseReflectionExtension;
 use Phpactor\LanguageServer\Core\Server\ClientApi;
 use Phpactor\LanguageServer\Core\Workspace\Workspace;
 use Phpactor\MapResolver\Resolver;
+use Phpactor\Extension\PHPUnit\CodeTransform\GenerateTestMethods;
 use Phpactor\WorseReflection\Reflector;
+use Phpactor\CodeTransform\Domain\Refactor\OverrideMethod;
 
 class PHPUnitExtension implements OptionalExtension
 {
@@ -47,8 +48,7 @@ class PHPUnitExtension implements OptionalExtension
                 return new GenerateTestMethodCommand(
                     $container->get(ClientApi::class),
                     $container->expect(LanguageServerExtension::SERVICE_SESSION_WORKSPACE, Workspace::class),
-                    $container->expect(OverrideMethod::class, WorseOverrideMethod::class),
-                    $container->expect(WorseReflectionExtension::SERVICE_REFLECTOR, Reflector::class),
+                    $container->get(GenerateTestMethods::class)
                 );
             },
             [
@@ -62,10 +62,19 @@ class PHPUnitExtension implements OptionalExtension
     private function registerServices(ContainerBuilder $container): void
     {
         $container->register(GenerateTestMethodProvider::class, function (Container $container) {
-            return new GenerateTestMethodProvider();
+            return new GenerateTestMethodProvider(
+                $container->get(GenerateTestMethods::class),
+            );
         }, [
             LanguageServerExtension::TAG_CODE_ACTION_PROVIDER => []
         ]);
+
+        $container->register(GenerateTestMethods::class, function (Container $container) {
+            return new GenerateTestMethods(
+                $container->expect(WorseReflectionExtension::SERVICE_REFLECTOR, Reflector::class),
+                $container->expect(OverrideMethod::class, WorseOverrideMethod::class),
+            );
+        });
     }
 
     private function registerWorseReflection(ContainerBuilder $container): void
