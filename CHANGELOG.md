@@ -1,6 +1,19 @@
 Changelog
 =========
 
+## 2026.10.07.0
+
+Features:
+
+- Option to use incremental text document updates (`language_server.text_document_sync_incremental`). Disabled by default. @dantleech #3010
+
+Improvements:
+
+- Updated composer dependencies @dantleech #3070
+- Parallel indexing @ajenbo #3065
+- Stubs: Use first parameter when parameter is decalared twice @gregmayes #3064
+- Add override attribute when generating new methods @mamazu #3057
+
 ## 2026.06.23.0
 
 Features:
